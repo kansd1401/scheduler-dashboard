@@ -9,6 +9,8 @@ import {
   getMostPopularDay,
   getInterviewsPerDay
  } from "helpers/selectors";
+
+ import { setInterview } from "helpers/reducers";
 const data = [
   {
     id: 1,
@@ -38,34 +40,51 @@ class Dashboard extends Component {
     focused: null,
     days: [],
     appointments: {},
-    interviewers: {}
+    interviewers: {},
+    socket:null
    };
 
-  componentDidMount() {
-    const focused = JSON.parse(localStorage.getItem("focused"));
-    Promise.all([
-      axios.get("/api/days"),
-      axios.get("/api/appointments"),
-      axios.get("/api/interviewers")
-    ]).then(([days, appointments, interviewers]) => {
-      this.setState({
-        loading: false,
-        days: days.data,
-        appointments: appointments.data,
-        interviewers: interviewers.data
-      });
-    });
-    if (focused) {
-      this.setState({ focused });
-    }
-  }
+   socket = {}
 
+   
+   componentDidMount() {
+     this.socket = new WebSocket(process.env.REACT_APP_WEBSOCKET_URL);
+     const focused = JSON.parse(localStorage.getItem("focused"));
+     this.socket.onmessage = event => {
+      const data = JSON.parse(event.data);
+    
+      if (typeof data === "object" && data.type === "SET_INTERVIEW") {
+        this.setState(previousState =>
+          setInterview(previousState, data.id, data.interview)
+        );
+      }
+    };
+     Promise.all([
+       axios.get("/api/days"),
+       axios.get("/api/appointments"),
+       axios.get("/api/interviewers")
+      ]).then(([days, appointments, interviewers]) => {
+        this.setState({
+          loading: false,
+          days: days.data,
+          appointments: appointments.data,
+          interviewers: interviewers.data
+        });
+      });
+      if (focused) {
+        this.setState({ focused });
+      }
+    }
+    
   componentDidUpdate(previousProps, previousState) {
     if (previousState.focused !== this.state.focused) {
       localStorage.setItem("focused", JSON.stringify(this.state.focused));
     }
   }
 
+  componentWillUnmount() {
+    this.socket.close();
+  }
 
   focus(id){
     this.setState((previousState) => ({
